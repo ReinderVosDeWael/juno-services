@@ -1,0 +1,89 @@
+models:
+  main-llm:
+    model: ai/qwen3.6:35B-A3B-UD-Q4_K_M
+  embedding:
+    model: ai/qwen3-embedding:8B-Q4_K_M
+
+services:
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:v3.19.2
+    models:
+      main-llm:
+        endpoint_var: OPENAI_BASE_URL
+    ports:
+      - "9000:9000"
+    environment:
+      - ALLOW_SIGNUPS=false
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - BASE_URL=http://localhost:9925
+      - OPENAI_API_KEY=dummy-key
+    volumes:
+      - /data/mealie:/app/data/
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+  ntfy:
+    image: binwiederhier/ntfy:v2.11.0
+    command: serve
+    ports:
+      - "8025:80"
+    environment:
+      - NTFY_BASE_URL=http://localhost:8025
+    volumes:
+      - ntfy-cache:/var/cache/ntfy
+      - ntfy-etc:/etc/ntfy
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+  paperless-webserver:
+    image: paperlessngx/paperless-ngx:3.0.0-beta.rc1
+    ports:
+      - "8010:8000"
+    depends_on:
+      - paperless-redis
+    environment:
+      - PAPERLESS_REDIS=redis://paperless-redis:6379
+      - PAPERLESS_TIME_ZONE=America/New_York
+      - PAPERLESS_OCR_LANGUAGE=eng
+    env_file: .env
+    volumes:
+      - /data/paperless:/usr/src/paperless
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+  paperless-redis:
+    image: docker.io/library/redis:7-alpine
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:15
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=sqlite3
+      - FORGEJO__database__PATH=/data/forgejo.db
+    volumes:
+      - /data/forgejo:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+networks:
+  homelab-net:
+    driver: bridge
+
+volumes:
+  ntfy-cache:
+  ntfy-etc:
