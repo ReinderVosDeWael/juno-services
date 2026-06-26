@@ -1,54 +1,66 @@
 models:
   main-llm:
     model: ai/qwen3.6:35B-A3B-UD-Q4_K_M
+  small-llm:
+    model: ai/gemma4:E2B
   embedding:
     model: ai/qwen3-embedding:8B-Q4_K_M
 
 services:
+  traefik:
+    image: traefik:v3.7.5
+    container_name: traefik
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "0.0.0.0:80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
   mealie:
     image: ghcr.io/mealie-recipes/mealie:v3.19.2
     models:
       main-llm:
         endpoint_var: OPENAI_BASE_URL
-    ports:
-      - "9000:9000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mealie.rule=Host(`mealie.home`)
+      - traefik.http.routers.mealie.entrypoints=web
+      - traefik.http.services.mealie.loadbalancer.server.port=9000
     environment:
       - ALLOW_SIGNUPS=false
       - PUID=1000
       - PGID=1000
       - TZ=America/New_York
-      - BASE_URL=http://localhost:9925
+      - BASE_URL=http://mealie.home
       - OPENAI_API_KEY=dummy-key
+      - TOKEN_TIME=720 # Hours
     volumes:
       - /data/mealie:/app/data/
     networks:
       - homelab-net
     restart: unless-stopped
 
-  ntfy:
-    image: binwiederhier/ntfy:v2.11.0
-    command: serve
-    ports:
-      - "8025:80"
-    environment:
-      - NTFY_BASE_URL=http://localhost:8025
-    volumes:
-      - ntfy-cache:/var/cache/ntfy
-      - ntfy-etc:/etc/ntfy
-    networks:
-      - homelab-net
-    restart: unless-stopped
-
   paperless-webserver:
     image: paperlessngx/paperless-ngx:3.0.0-beta.rc1
-    ports:
-      - "8010:8000"
+    container_name: paperless-webserver
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.paperless.rule=Host(`paperless.home`)
+      - traefik.http.routers.paperless.entrypoints=web
+      - traefik.http.services.paperless.loadbalancer.server.port=8000
     depends_on:
       - paperless-redis
     environment:
       - PAPERLESS_REDIS=redis://paperless-redis:6379
       - PAPERLESS_TIME_ZONE=America/New_York
       - PAPERLESS_OCR_LANGUAGE=eng
+      - PAPERLESS_ADMIN_URL=http://paperless.home
     env_file: .env
     volumes:
       - /data/paperless:/usr/src/paperless
@@ -62,16 +74,61 @@ services:
       - homelab-net
     restart: unless-stopped
 
+  wwebjs-api:
+    image: avoylenko/wwebjs-api:v1.34.7
+    env_file: .env.wwebjs
+    ports: 
+      - "30010:3000"
+    environment:
+      - BASE_WEBHOOK_URL=http://n8n:5678/webhook/whatsapp
+    volumes:
+      - /data/wwebjs_sessions:/app/sessions
+    networks:
+      - homelab-net
+
+  n8n:
+    image: n8nio/n8n:2.28.0
+    container_name: n8n
+    user: "1000:1000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.n8n.rule=Host(`n8n.home`)
+      - traefik.http.routers.n8n.entrypoints=web
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+    environment:
+      - N8N_ENABLE_EXECUTE_COMMAND=true
+      - NODES_EXCLUDE=[]
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=false
+      - N8N_HOST=n8n.home
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - GENERIC_TIMEZONE=America/New_York
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - /data/n8n:/home/node/.n8n
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
   forgejo:
     image: codeberg.org/forgejo/forgejo:15
+    container_name: forgejo
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.forgejo.rule=Host(`forgejo.home`)
+      - traefik.http.routers.forgejo.entrypoints=web
+      - traefik.http.services.forgejo.loadbalancer.server.port=3000
     ports:
-      - "3000:3000"
       - "2222:22"
     environment:
       - USER_UID=1000
       - USER_GID=1000
       - FORGEJO__database__DB_TYPE=sqlite3
       - FORGEJO__database__PATH=/data/forgejo.db
+      - FORGEJO__server__ROOT_URL=http://forgejo.home
+      - FORGEJO__server__DOMAIN=forgejo.home
     volumes:
       - /data/forgejo:/data
       - /etc/timezone:/etc/timezone:ro
@@ -80,10 +137,36 @@ services:
       - homelab-net
     restart: unless-stopped
 
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.9.6
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.open-webui.rule=Host(`openwebui.home`)
+      - traefik.http.routers.open-webui.entrypoints=web
+      - traefik.http.services.open-webui.loadbalancer.server.port=8080
+    models:
+      main-llm:
+        endpoint_var: OLLAMA_BASE_URL
+    environment:
+      - WEBUI_SECRET_KEY=
+    volumes:
+      - /data/open-webui:/app/backend/data
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+  tts:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.5.0
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tts.rule=Host(`tts.home`)
+      - traefik.http.routers.tts.entrypoints=web
+      - traefik.http.services.tts.loadbalancer.server.port=8880
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
 networks:
   homelab-net:
     driver: bridge
 
-volumes:
-  ntfy-cache:
-  ntfy-etc:
