@@ -9,7 +9,7 @@ models:
 services:
   traefik:
     image: traefik:v3.7.5
-    container_name: traefik
+    container_name: juno-traefik
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -24,6 +24,7 @@ services:
 
   mealie:
     image: ghcr.io/mealie-recipes/mealie:v3.19.2
+    container_name: juno-mealie
     models:
       main-llm:
         endpoint_var: OPENAI_BASE_URL
@@ -48,7 +49,7 @@ services:
 
   paperless-webserver:
     image: paperlessngx/paperless-ngx:3.0.0-beta.rc1
-    container_name: paperless-webserver
+    container_name: juno-paperless-webserver
     labels:
       - traefik.enable=true
       - traefik.http.routers.paperless.rule=Host(`paperless.home`)
@@ -70,12 +71,14 @@ services:
 
   paperless-redis:
     image: docker.io/library/redis:7-alpine
+    container_name: juno-paperless-redis
     networks:
       - homelab-net
     restart: unless-stopped
 
   wwebjs-api:
     image: avoylenko/wwebjs-api:v1.34.7
+    container_name: juno-wwebjs-api
     env_file: .env.wwebjs
     ports: 
       - "30010:3000"
@@ -88,7 +91,7 @@ services:
 
   n8n:
     image: n8nio/n8n:2.28.0
-    container_name: n8n
+    container_name: juno-n8n
     user: "1000:1000"
     labels:
       - traefik.enable=true
@@ -114,7 +117,7 @@ services:
 
   forgejo:
     image: codeberg.org/forgejo/forgejo:15
-    container_name: forgejo
+    container_name: juno-forgejo
     labels:
       - traefik.enable=true
       - traefik.http.routers.forgejo.rule=Host(`forgejo.home`)
@@ -139,6 +142,7 @@ services:
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:v0.9.6
+    container_name: juno-open-webui
     labels:
       - traefik.enable=true
       - traefik.http.routers.open-webui.rule=Host(`openwebui.home`)
@@ -155,8 +159,44 @@ services:
       - homelab-net
     restart: unless-stopped
 
+  synapse:
+    image: matrixdotorg/synapse:sha-7bc2b93
+    container_name: juno-synapse
+    environment:
+      - SYNAPSE_SERVER_NAME=synapse.home
+      - SYNAPSE_REPORT_STATS=no
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.synapse.rule=Host(`synapse.home`)
+      - traefik.http.routers.synapse.entrypoints=web
+      - traefik.http.services.synapse.loadbalancer.server.port=8008
+    ports:
+      - "8008:8008"
+    volumes:
+      - /data/synapse:/data
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: juno-searxng
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.searxng.rule=Host(`searxng.home`)
+      - traefik.http.routers.searxng.entrypoints=web
+      - traefik.http.services.searxng.loadbalancer.server.port=8080
+    environment:
+      - SEARXNG_BASE_URL=http://searxng.home/
+    volumes:
+      - /data/searxng:/etc/searxng
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
   tts:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.5.0
+    container_name: juno-tts
     labels:
       - traefik.enable=true
       - traefik.http.routers.tts.rule=Host(`tts.home`)
@@ -165,6 +205,18 @@ services:
     networks:
       - homelab-net
     restart: unless-stopped
+
+  signal:
+    image: bbernhard/signal-cli-rest-api:latest
+    environment:
+      - MODE=native #supported modes: json-rpc, native, normal
+    ports:
+      - "8080:8080" #map docker port 8080 to host port 8080.
+    networks:
+      - homelab-net
+    restart: unless-stopped
+    volumes:
+      - /data/signal-cli-config:/home/.local/share/signal-cli #map "signal-cli-config" folder on host system into docker container. the folder contains the password and cryptographic keys when a new number is registered
 
 networks:
   homelab-net:
