@@ -42,7 +42,7 @@ services:
       - OPENAI_API_KEY=dummy-key
       - TOKEN_TIME=720 # Hours
     volumes:
-      - /data/mealie:/app/data/
+      - /onedrive/data/juno/mealie:/app/data/
     networks:
       - homelab-net
     restart: unless-stopped
@@ -64,7 +64,7 @@ services:
       - PAPERLESS_ADMIN_URL=http://paperless.home
     env_file: .env
     volumes:
-      - /data/paperless:/usr/src/paperless
+      - /onedrive/data/juno/paperless:/usr/src/paperless
     networks:
       - homelab-net
     restart: unless-stopped
@@ -85,7 +85,7 @@ services:
     environment:
       - BASE_WEBHOOK_URL=http://n8n:5678/webhook/whatsapp
     volumes:
-      - /data/wwebjs_sessions:/app/sessions
+      - /onedrive/data/juno/wwebjs_sessions:/app/sessions
     networks:
       - homelab-net
 
@@ -110,7 +110,7 @@ services:
       - GENERIC_TIMEZONE=America/New_York
       - N8N_SECURE_COOKIE=false
     volumes:
-      - /data/n8n:/home/node/.n8n
+      - /onedrive/data/juno/n8n:/home/node/.n8n
     networks:
       - homelab-net
     restart: unless-stopped
@@ -133,7 +133,7 @@ services:
       - FORGEJO__server__ROOT_URL=http://forgejo.home
       - FORGEJO__server__DOMAIN=forgejo.home
     volumes:
-      - /data/forgejo:/data
+      - /onedrive/data/juno/forgejo:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     networks:
@@ -154,7 +154,7 @@ services:
     environment:
       - WEBUI_SECRET_KEY=
     volumes:
-      - /data/open-webui:/app/backend/data
+      - /onedrive/data/juno/open-webui:/app/backend/data
     networks:
       - homelab-net
     restart: unless-stopped
@@ -173,7 +173,7 @@ services:
     ports:
       - "8008:8008"
     volumes:
-      - /data/synapse:/data
+      - /onedrive/data/juno/synapse:/data
     networks:
       - homelab-net
     restart: unless-stopped
@@ -189,7 +189,7 @@ services:
     environment:
       - SEARXNG_BASE_URL=http://searxng.home/
     volumes:
-      - /data/searxng:/etc/searxng
+      - /onedrive/data/juno/searxng:/etc/searxng
     networks:
       - homelab-net
     restart: unless-stopped
@@ -206,6 +206,20 @@ services:
       - homelab-net
     restart: unless-stopped
 
+  onedrive:
+    image: driveone/onedrive:edge
+    container_name: juno-onedrive
+    environment:
+      - ONEDRIVE_UID=1000
+      - ONEDRIVE_GID=1000
+      - ONEDRIVE_SINGLE_DIRECTORY=juno
+    volumes:
+      - /onedrive/conf:/onedrive/conf
+      - /onedrive/data:/onedrive/data
+    networks:
+      - homelab-net
+    restart: unless-stopped
+
   signal:
     image: bbernhard/signal-cli-rest-api:latest
     environment:
@@ -216,7 +230,7 @@ services:
       - homelab-net
     restart: unless-stopped
     volumes:
-      - /data/signal-cli-config:/home/.local/share/signal-cli #map "signal-cli-config" folder on host system into docker container. the folder contains the password and cryptographic keys when a new number is registered
+      - /onedrive/data/juno/signal-cli-config:/home/.local/share/signal-cli #map "signal-cli-config" folder on host system into docker container. the folder contains the password and cryptographic keys when a new number is registered
 
 networks:
   homelab-net:
